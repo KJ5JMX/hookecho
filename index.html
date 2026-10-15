@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A daily storm puzzle. Build wind, find the zone, spin up a tornado.">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Hook Echo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+/* Layout: one handheld "storm radio" centered on a dark table; radar screen on top, readouts, then a Game Boy control deck. Single dark look on purpose. */
+:root{
+  --room:#15171b; --shell:#d6a62a; --shell-hi:#e8bf4c; --shell-lo:#9c7414; --ink:#2a2006;
+  --key:#26282c; --key-hi:#3a3d43; --key-txt:#eceae2;
+  --screen:#051410; --radar:#4fd486; --radar-dim:#1d5a3c; --shear:#b38bff; --warn:#ff4a3d; --amber:#ffd04a;
+  --font-display:"Silkscreen","Courier New",monospace; --font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--room);color:var(--key-txt);font-family:var(--font-mono);-webkit-tap-highlight-color:transparent;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;box-sizing:border-box;
+  display:flex;justify-content:center;align-items:flex-start;overflow-x:hidden}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;touch-action:manipulation;-webkit-user-select:none;user-select:none;cursor:pointer}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.device{width:100%;max-width:430px;background:linear-gradient(170deg,var(--shell-hi),var(--shell) 40%,var(--shell-lo));border-radius:18px 18px 46px 18px;
+  padding:12px 14px 16px;box-shadow:0 2px 0 #f3d377 inset,0 -3px 0 #7d5c0c inset,0 18px 40px #000a;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;justify-content:space-between;align-items:baseline;color:var(--ink);padding-inline:4px}
+.logo{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.04em}
+.model{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;opacity:.8}
+.bezel{background:#1d1f22;border-radius:10px 10px 26px 10px;padding:10px;box-shadow:0 2px 0 #0008 inset}
+.screenwrap{position:relative;width:min(100%,max(230px,calc(100dvh - 400px)));margin-inline:auto;aspect-ratio:1;max-width:100%}
+canvas{display:block;width:100%;height:100%;border-radius:4px;background:var(--screen)}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:16px;background:#041009e6;border-radius:4px;color:#cfeedd;font-size:11px;line-height:1.4;overflow:auto}
+.overlay[hidden]{display:none}
+.overlay h2{font-family:var(--font-display);font-size:22px;margin:0;color:var(--radar);letter-spacing:.03em;text-wrap:balance}
+.overlay h2.bad{color:var(--amber)}
+.overlay ul{margin:0;padding-left:16px;display:grid;gap:3px}
+.overlay .sub{color:#8fb9a3;font-size:11px}
+.share{background:#000;border:1px solid var(--radar-dim);border-radius:6px;padding:8px 10px;white-space:pre-wrap;font-size:13px;line-height:1.35;margin:0;color:#e9f7ee;user-select:all}
+.stats{display:flex;gap:16px;font-size:11px;color:#8fb9a3}
+.stats b{display:block;font-size:18px;color:#e9f7ee;font-variant-numeric:tabular-nums}
+.obtns{display:flex;gap:8px;flex-wrap:wrap}
+.obtn{background:var(--radar);color:#04140c;border:0;border-radius:999px;padding:8px 16px;font-family:var(--font-display);font-size:12px}
+.obtn.ghost{background:transparent;color:var(--radar);box-shadow:0 0 0 1px var(--radar) inset}
+.meters{display:grid;gap:5px;background:#1d1f22;border-radius:8px;padding:8px 10px}
+.mrow{display:grid;grid-template-columns:64px 1fr 30px;align-items:center;gap:8px;font-size:10px}
+.mrow .lab{font-family:var(--font-display);letter-spacing:.05em;color:#c9c6b8}
+.mrow .val{text-align:right;font-variant-numeric:tabular-nums;color:#e9f7ee}
+.track{position:relative;height:10px;background:#0b0c0e;border-radius:2px;overflow:hidden}
+.band{position:absolute;top:0;bottom:0;background:#1f6a43}
+.fill{position:absolute;left:0;top:0;bottom:0;background:#4b5058;transition:width .25s}
+.mrow.ok .fill{background:#3fb874}
+.mrow.hi .fill{background:var(--warn)}
+.needle{position:absolute;top:-1px;bottom:-1px;width:3px;background:#fff;transform:translateX(-1px);transition:left .25s}
+.mrow.goal .fill{background:var(--shear)}
+.mrow.str .fill{background:linear-gradient(90deg,#3fb874,#ffd04a 55%,#ff4a3d 80%,#d23ce0)}
+.tick{position:absolute;top:0;bottom:0;width:1px;background:#000a}
+.mrow[data-k="s"] .val::after{content:" mph";font-size:8px;color:#8b8f96}
+.mrow{grid-template-columns:64px 1fr 48px}
+.sep{height:1px;background:#33363b;margin-block:2px}
+.deck{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;padding-inline:4px}
+.dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px)}
+.dpad button{background:var(--key);border:0;color:var(--key-txt);font-size:18px;box-shadow:0 3px 0 #0009}
+.dpad button:active,.dpad button.q{background:var(--key-hi);box-shadow:0 1px 0 #0009;transform:translateY(2px)}
+.dpad button.q{color:var(--amber)}
+.dpad .up{grid-area:1/2;border-radius:6px 6px 0 0}.dpad .down{grid-area:3/2;border-radius:0 0 6px 6px}
+.dpad .left{grid-area:2/1;border-radius:6px 0 0 6px}.dpad .right{grid-area:2/3;border-radius:0 6px 6px 0}
+.dpad .hub{grid-area:2/2;background:var(--key)}
+.fuel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;justify-items:center}
+.fcol{display:grid;gap:4px;justify-items:center;width:100%;max-width:62px}
+.fcol .flab{font-family:var(--font-display);font-size:10px;color:var(--ink);letter-spacing:.05em}
+.fb{width:100%;height:40px;border:0;background:#2f9e55;color:#effff4;border-radius:10px;font-size:18px;font-weight:700;box-shadow:0 3px 0 #17592e}
+.fb.minus{background:#c4362f;color:#fff0ee;height:32px;font-size:16px;box-shadow:0 3px 0 #6e1a16}
+.fb:active,.fb.q{transform:translateY(2px);box-shadow:0 1px 0 #0008;filter:brightness(1.2)}
+.fb.q{outline:2px solid var(--amber);outline-offset:1px}
+.pills{display:flex;justify-content:center;gap:18px}
+.pill{background:#6d6b63;border:0;border-radius:999px;padding:5px 14px;font-family:var(--font-display);font-size:10px;color:#f4f1e6;letter-spacing:.06em;box-shadow:0 2px 0 #0007;transform:rotate(-12deg)}
+.hint{text-align:center;font-size:10px;color:var(--ink);opacity:.75}
+@media (max-width:380px){.dpad{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px)}.mrow{grid-template-columns:56px 1fr 28px}}
+@media (prefers-reduced-motion:reduce){.fill,.needle{transition:none}}
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="brand"><span class="logo">HOOK ECHO</span><span class="model" id="dayLabel">DAILY #1</span></div>
+  <div class="bezel">
+    <div class="screenwrap">
+      <canvas id="cv" aria-label="Radar screen"></canvas>
+      <div class="overlay" id="overlay"></div>
+    </div>
+  </div>
+  <div class="meters" id="meters">
+    <div class="mrow" data-k="m"><span class="lab">MOIST</span><div class="track"><div class="band"></div><div class="fill"></div><div class="needle"></div></div><span class="val">0</span></div>
+    <div class="mrow" data-k="u"><span class="lab">LIFT</span><div class="track"><div class="band"></div><div class="fill"></div><div class="needle"></div></div><span class="val">0</span></div>
+    <div class="mrow" data-k="h"><span class="lab">HEAT</span><div class="track"><div class="band"></div><div class="fill"></div><div class="needle"></div></div><span class="val">0</span></div>
+    <div class="sep"></div>
+    <div class="mrow str" data-k="s"><span class="lab">WIND</span><div class="track"><div class="fill"></div><div class="tick" style="left:25.0%"></div><div class="tick" style="left:33.1%"></div><div class="tick" style="left:42.7%"></div><div class="tick" style="left:52.3%"></div><div class="tick" style="left:63.8%"></div><div class="tick" style="left:77.3%"></div></div><span class="val">0</span></div>
+    <div class="mrow goal" data-k="r"><span class="lab">SPIN</span><div class="track"><div class="fill"></div></div><span class="val">0</span></div>
+  </div>
+  <div class="deck">
+    <div class="dpad" role="group" aria-label="Steer">
+      <button class="up" data-move="up" aria-label="Steer north">▲</button>
+      <button class="left" data-move="left" aria-label="Steer west">◀</button>
+      <div class="hub"></div>
+      <button class="right" data-move="right" aria-label="Steer east">▶</button>
+      <button class="down" data-move="down" aria-label="Steer south">▼</button>
+    </div>
+    <div class="fuel" role="group" aria-label="Fuel">
+      <div class="fcol"><span class="flab">MOIST</span><button class="fb" data-fuel="m+" aria-label="Add moisture">+</button><button class="fb minus" data-fuel="m-" aria-label="Remove moisture">−</button></div>
+      <div class="fcol"><span class="flab">LIFT</span><button class="fb" data-fuel="u+" aria-label="Add updraft">+</button><button class="fb minus" data-fuel="u-" aria-label="Remove updraft">−</button></div>
+      <div class="fcol"><span class="flab">HEAT</span><button class="fb" data-fuel="h+" aria-label="Add heat">+</button><button class="fb minus" data-fuel="h-" aria-label="Remove heat">−</button></div>
+    </div>
+  </div>
+  <div class="pills"><button class="pill" id="practiceBtn">PRACTICE</button><button class="pill" id="startBtn">START</button></div>
+  <div class="hint">Keys: arrows · Q/A W/S E/D</div>
+</div>
+<script>
+// ===== CORE (pure game logic, shared by page + test) =====
+const MAX_SWEEPS = 160, SWEEP_MS = 1500, REVEAL_MPH = 90, SPIN_MPH = 80, FIZZLE_MPH = 10;
+const EF_MPH = [65,86,111,136,166,201];
+function efFor(mph){let e=-1;EF_MPH.forEach((v,i)=>{if(mph>=v)e=i});return e}
+const BANDS = { m: [40, 72], u: [45, 82], h: [38, 72] };
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hashStr(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19}h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^h>>>16)>>>0}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function makeWorld(seed){
+  const r=mulberry32(seed), rnd=(a,b)=>a+(b-a)*r();
+  const W={seed};
+  W.theta0=rnd(0,Math.PI*2); W.wa=rnd(0,6.28); W.wb=rnd(0,6.28);
+  W.bx0=rnd(38,62); W.by0=rnd(38,62); W.phi0=rnd(0,Math.PI); W.curve=rnd(-0.01,0.01);
+  {const za=rnd(0,Math.PI*2),zs=rnd(0.45,0.6);W.zvx=Math.cos(za)*zs;W.zvy=Math.sin(za)*zs;W.zrot=rnd(-0.006,0.006);}
+  setZone(W,0);
+  const blobs=()=>Array.from({length:4},()=>({x:rnd(0,100),y:rnd(0,100),s:rnd(14,28),a:rnd(0.35,0.9)}));
+  W.mb=blobs(); W.hb=blobs();
+  W.lat=rnd(-45,58); W.lon=rnd(-179,179);
+  W.events=[]; W.wobble=[]; W.hot=[]; W.turb=[];
+  const T=[
+    ['dry','Dry air intrusion: moisture −14'],
+    ['cap','Capping inversion: heat −12'],
+    ['outflow','Outflow boundary: updraft −12'],
+    ['gust','Gust front shoves the storm'],
+    ['shift','Wind shift'],
+    ['jet','Low-level jet: moisture +10'],
+    ['split','Storm split: wind −30 mph'],
+    ['occlude','Occlusion: rotation collapses'],
+    ['shift','Wind shift'],
+  ];
+  for(let i=0;i<MAX_SWEEPS;i++){
+    const p=r(), k=Math.floor(r()*T.length), ang=r()*Math.PI*2, sgn=r()<.5?-1:1;
+    W.events.push(i>=6&&p<0.2?{type:T[k][0],label:T[k][1],ang,sgn}:null);
+    W.wobble.push([(r()-.5)*.6,(r()-.5)*.6]);
+    W.hot.push([(r()-.5)*4,(r()-.5)*4]);
+    W.turb.push([Math.floor(r()*3),(r()<.5?-1:1)*(6+r()*8)]);
+  }
+  // start: outside the zone but reachable
+  let sx=20,sy=20;
+  for(let t=0;t<400;t++){
+    const x=rnd(14,86),y=rnd(14,86),{along,across}=bandCoords(W,x,y);
+    if(Math.abs(across)>24&&Math.abs(across)<36&&Math.abs(along)<26){sx=x;sy=y;break}
+  }
+  W.sx=sx; W.sy=sy;
+  return W;
+}
+function tri(v){const L=25,sp=50,u=(((v-L)%(2*sp))+2*sp)%(2*sp);return L+(u<sp?u:2*sp-u)}
+function setZone(W,sweep){W.bx=tri(W.bx0+W.zvx*sweep);W.by=tri(W.by0+W.zvy*sweep);W.phi=W.phi0+W.zrot*sweep}
+function bandCoords(W,x,y){
+  const dx=x-W.bx,dy=y-W.by,c=Math.cos(W.phi),s=Math.sin(W.phi);
+  const along=dx*c+dy*s; const across=-dx*s+dy*c-W.curve*along*along;
+  return {along,across};
+}
+function shearAt(W,x,y){const {along,across}=bandCoords(W,x,y);return Math.exp(-across*across/98)*Math.exp(-along*along/1800)}
+function fieldAt(bl,x,y){let v=.22;for(const b of bl){const dx=x-b.x,dy=y-b.y;v+=b.a*Math.exp(-(dx*dx+dy*dy)/(2*b.s*b.s))}return clamp(v,0,1)}
+function windAt(W,x,y,shift){
+  const bc=bandCoords(W,x,y),bend=1.3*Math.exp(-bc.across*bc.across/392)*Math.exp(-bc.along*bc.along/1800);
+  const a=W.theta0+shift+bend+0.6*Math.sin(x/23+W.wa)+0.5*Math.cos(y/19+W.wb);
+  const sp=0.55+0.25*Math.sin((x+y)/31+W.wa);
+  return [Math.cos(a)*sp,Math.sin(a)*sp];
+}
+function newState(W){return{x:W.sx,y:W.sy,m:55,u:60,h:55,s:40,r:0,streak:0,seen:false,sweep:0,shift:0,status:'play',reason:'',log:[],trail:[[W.sx,W.sy]]}}
+function step(st,W,inp){
+  const i=st.sweep, msgs=[];
+  setZone(W,i);
+  if(inp.fuel){const k=inp.fuel[0],sg=inp.fuel[1]==='-'?-1:1;st[k]+=sg*(sg>0?14:12)}
+  const mo=fieldAt(W.mb,st.x,st.y), he=fieldAt(W.hb,st.x,st.y);
+  const sh=shearAt(W,st.x,st.y), inZ=st.seen&&sh>0.35, dr=inZ?1.4:1;
+  st.m+=((mo-0.45)*8-2)*dr;
+  st.h+=((he-0.45)*8-2)*dr;
+  st.u+=((st.h-55)*0.12-2.2)*dr;
+  if(inZ){const t=W.turb[i];st['muh'[t[0]]]+=t[1]}
+  let px=0,py=0; const ev=W.events[i];
+  if(ev&&!(ev.type==='occlude'&&st.r<25)){msgs.push(ev.label);
+    if(ev.type==='dry')st.m-=14; else if(ev.type==='cap')st.h-=12; else if(ev.type==='outflow')st.u-=12;
+    else if(ev.type==='gust'){px=Math.cos(ev.ang)*3.5;py=Math.sin(ev.ang)*3.5}
+    else if(ev.type==='shift')st.shift+=0.9*ev.sgn; else if(ev.type==='jet')st.m+=10;
+    else if(ev.type==='split')st.s-=30; else if(ev.type==='occlude')st.r-=35;}
+  st.m=clamp(st.m,0,100);st.u=clamp(st.u,0,100);st.h=clamp(st.h,0,100);
+  const inB=(v,b)=>v>=b[0]&&v<=b[1]?1:0;
+  const c=inB(st.m,BANDS.m)+inB(st.u,BANDS.u)+inB(st.h,BANDS.h);
+  if(c===3){st.streak++;st.s+=(3+Math.min(st.streak,10)*0.6)*(1-st.s/280)*(inZ?0.6:1)}
+  else{st.streak=0;st.s+=[-6,-3,1][c]}
+  if(st.m>75&&st.u<40){st.s-=6;st.m-=8;msgs.push('Too wet, not enough lift: raining itself out')}
+  if(st.u<15){st.s-=5;msgs.push('Updraft starving')}
+  let wx=W.wobble[i][0],wy=W.wobble[i][1];
+  if(st.h>80){wx+=W.hot[i][0];wy+=W.hot[i][1];msgs.push('Too hot: updraft unstable, storm wandering')}
+  if(!st.seen&&st.s>=REVEAL_MPH){st.seen=true;msgs.push('ZONE DETECTED')}
+  if(inZ&&st.s>=SPIN_MPH)st.r+=sh*5*(st.s/150); else st.r-=3.5;
+  st.s=clamp(st.s,0,260); st.r=clamp(st.r,0,100);
+  const w=windAt(W,st.x,st.y,st.shift), d=DIRS[inp.move]||[0,0];
+  st.x+=w[0]*0.7+d[0]*1.8+wx+px; st.y+=w[1]*0.7+d[1]*1.8+wy+py;
+  st.sweep++; st.log.push(Math.round(st.s)); st.trail.push([st.x,st.y]);
+  setZone(W,st.sweep);
+  if(st.r>=100){st.status='win';st.ef=efFor(st.s);st.mph=Math.round(st.s);st.reason='Tornado on the ground'}
+  else if(st.s<=FIZZLE_MPH){st.status='lose';st.reason='The storm fizzled out'}
+  else if(st.x<0||st.x>100||st.y<0||st.y>100){st.status='lose';st.reason='The storm drifted off the map'}
+  else if(st.sweep>=MAX_SWEEPS){st.status='lose';st.reason='Out of time'}
+  return msgs;
+}
+// ===== END CORE =====
+// ===== PAGE =====
+const $=s=>document.querySelector(s);
+const cv=$('#cv'), ctx=cv.getContext('2d'), overlay=$('#overlay');
+const LAUNCH=Date.UTC(2026,9,14);
+function todayKey(d=new Date()){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function dayNum(d=new Date()){return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-LAUNCH)/864e5)+1}
+const store={get(){try{return JSON.parse(localStorage.getItem('supercell:v1'))||{results:{}}}catch(e){return{results:{}}}},
+  set(v){try{localStorage.setItem('supercell:v1',JSON.stringify(v))}catch(e){}}};
+function streakOf(results){let n=0;const d=new Date();if(!results[todayKey(d)])d.setDate(d.getDate()-1);
+  while(results[todayKey(d)]&&results[todayKey(d)].win){n++;d.setDate(d.getDate()-1)}return n}
+
+let spinPhase=0,prevS=0,prevR=0,revealAt=0;
+let mode='daily', W, st, queued={move:null,fuel:null}, running=false, phase=0, lastT=0, acc=0;
+let prevPos=[0,0], lastSweepAt=0, ticker=[], terrain, zone, particles=[], blobNoise=[];
+const FONT_MONO='"JetBrains Mono",ui-monospace,monospace',FONT_DISP='"Silkscreen",monospace';
+const fmt=s=>{const t=Math.round(s*SWEEP_MS/1000);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')};
+
+function setup(seedMode){
+  mode=seedMode;
+  const key=todayKey();
+  const seed=mode==='daily'?hashStr('supercell-'+key):(Math.random()*4294967296)>>>0;
+  W=makeWorld(seed); st=newState(W); prevPos=[st.x,st.y]; prevS=st.s; prevR=st.r;
+  queued={move:null,fuel:null}; ticker=[]; acc=0; phase=0;
+  $('#dayLabel').textContent=mode==='daily'?'DAILY #'+dayNum():'PRACTICE';
+  buildLayers(); seedParticles(); blobNoise=Array.from({length:7},()=>[Math.random()*6.28,Math.random()*6.28,Math.random()*6.28]);
+  updateMeters(); markQueued();
+}
+function buildLayers(){
+  terrain=document.createElement('canvas');terrain.width=terrain.height=100;
+  const t=terrain.getContext('2d'),img=t.createImageData(100,100);
+  for(let y=0;y<100;y++)for(let x=0;x<100;x++){const mo=fieldAt(W.mb,x,y),he=fieldAt(W.hb,x,y),i=(y*100+x)*4;
+    img.data[i]=6+he*34;img.data[i+1]=20+mo*16;img.data[i+2]=16+mo*30;img.data[i+3]=255}
+  t.putImageData(img,0,0);
+  buildZone();
+}
+function buildZone(){
+  zone=document.createElement('canvas');zone.width=zone.height=200;
+  const z=zone.getContext('2d'),zi=z.createImageData(200,200);
+  for(let y=0;y<200;y++)for(let x=0;x<200;x++){const sh=shearAt(W,x/2,y/2),i=(y*200+x)*4;let a=0;
+    if(sh>0.35){a=40+sh*40; if(((x+y)%8)<2)a+=55; if(sh>0.88&&((x-y+400)%6)<2)a+=60}
+    if(Math.abs(sh-0.35)<0.02)a=200;
+    zi.data[i]=179;zi.data[i+1]=139;zi.data[i+2]=255;zi.data[i+3]=a}
+  z.putImageData(zi,0,0);
+}
+function seedParticles(){particles=Array.from({length:150},()=>newParticle(true))}
+function newParticle(rand){return{x:Math.random()*100,y:Math.random()*100,age:rand?Math.random()*90:0,life:70+Math.random()*60,trail:[]}}
+
+function sizeCanvas(){const r=cv.getBoundingClientRect(),d=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.max(1,Math.round(r.width*d));cv.height=Math.max(1,Math.round(r.height*d))}
+new ResizeObserver(sizeCanvas).observe(cv);
+
+function draw(now){
+  const S=cv.width,k=S/100;ctx.setTransform(1,0,0,1,0,0);
+  ctx.imageSmoothingEnabled=true;ctx.drawImage(terrain,0,0,S,S);
+  // range rings + grid
+  ctx.strokeStyle='rgba(79,212,134,.12)';ctx.lineWidth=1;
+  for(let i=1;i<10;i++){ctx.beginPath();ctx.moveTo(i*10*k,0);ctx.lineTo(i*10*k,S);ctx.moveTo(0,i*10*k);ctx.lineTo(S,i*10*k);ctx.stroke()}
+  ctx.strokeStyle='rgba(79,212,134,.22)';
+  for(const rr of [16,32,48,64]){ctx.beginPath();ctx.arc(50*k,50*k,rr*k,0,7);ctx.stroke()}
+  if(st.seen){const age=now-revealAt;ctx.globalAlpha=age<2400?0.35+0.65*Math.abs(Math.sin(age/240)):1;ctx.drawImage(zone,0,0,S,S);ctx.globalAlpha=1}
+  // wind lines
+  ctx.lineCap='round';
+  for(const p of particles){
+    const w=windAt(W,p.x,p.y,st.shift);p.x+=w[0]*0.16;p.y+=w[1]*0.16;p.age++;
+    p.trail.push([p.x,p.y]);if(p.trail.length>9)p.trail.shift();
+    if(p.age>p.life||p.x<-2||p.x>102||p.y<-2||p.y>102){Object.assign(p,newParticle(false));continue}
+    const fade=Math.min(1,p.age/15,(p.life-p.age)/15);
+    ctx.strokeStyle=`rgba(210,235,255,${0.32*fade})`;ctx.lineWidth=Math.max(1,S/420);ctx.beginPath();
+    p.trail.forEach((q,i)=>i?ctx.lineTo(q[0]*k,q[1]*k):ctx.moveTo(q[0]*k,q[1]*k));ctx.stroke();
+  }
+  // trail
+  ctx.fillStyle='rgba(255,255,255,.28)';
+  for(let i=0;i<st.trail.length-1;i+=2){const q=st.trail[i];ctx.beginPath();ctx.arc(q[0]*k,q[1]*k,Math.max(1,S/300),0,7);ctx.fill()}
+  // storm (interpolated)
+  const tt=Math.min(1,(now-lastSweepAt)/350), px=prevPos[0]+(st.x-prevPos[0])*tt, py=prevPos[1]+(st.y-prevPos[1])*tt;
+  if(st.seen)drawZoneLabel(k,now);
+  drawGuide(px*k,py*k,px,py,k,now);
+  drawStorm(px*k,py*k,k,now,Math.min(100,(prevS+(st.s-prevS)*tt)/2.2),prevR+(st.r-prevR)*tt);
+  // radar sweep
+  const ang=phase*Math.PI*2-Math.PI/2, R=75*k;
+  for(let j=0;j<26;j++){const a=ang-j*0.03;ctx.strokeStyle=`rgba(79,212,134,${0.38*(1-j/26)})`;ctx.lineWidth=Math.max(1.5,S/250);
+    ctx.beginPath();ctx.moveTo(50*k,50*k);ctx.lineTo(50*k+Math.cos(a)*R,50*k+Math.sin(a)*R);ctx.stroke()}
+  // HUD
+  const fs=Math.max(10,S/34);ctx.font=`600 ${fs}px ${FONT_MONO}`;
+  ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,S,fs*1.8);
+  ctx.fillStyle='#9fe8bf';ctx.textBaseline='middle';ctx.textAlign='left';
+  ctx.fillText(`${Math.abs(W.lat).toFixed(1)}°${W.lat>=0?'N':'S'} ${Math.abs(W.lon).toFixed(1)}°${W.lon>=0?'E':'W'}`,fs*.6,fs*.9);
+  ctx.textAlign='right';ctx.fillText(`SWP ${String(st.sweep).padStart(3,'0')}  ${fmt(st.sweep)}`,S-fs*.6,fs*.9);
+  ctx.font=`600 ${fs}px ${FONT_MONO}`;
+  const live=ticker.filter(t=>st.sweep-t.at<3).map(t=>({msg:'» '+t.msg,col:t.bad?'#ffb3a8':'#9fe8bf'}));
+  if(live.length){ctx.fillStyle='rgba(0,0,0,.66)';ctx.fillRect(0,S-fs*1.9*live.length,S,fs*1.9*live.length);
+    live.forEach((t,i)=>{ctx.fillStyle=t.col;ctx.textAlign='left';ctx.fillText(t.msg,fs*.6,S-fs*1.9*(live.length-i)+fs*.95)})}
+}
+function zoneCenterNear(x,y){
+  const {along}=bandCoords(W,x,y),a=clamp(along,-22,22),c=Math.cos(W.phi),sn=Math.sin(W.phi),ac=W.curve*a*a;
+  return [W.bx+a*c-ac*sn, W.by+a*sn+ac*c];
+}
+function drawZoneLabel(k,now){
+  const fs=Math.max(9,k*2.6);ctx.font=`700 ${fs}px ${FONT_DISP}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const t=ctx.measureText('TORNADO ZONE').width;
+  ctx.fillStyle='rgba(20,8,40,.75)';ctx.fillRect(W.bx*k-t/2-6,W.by*k-fs*.8,t+12,fs*1.6);
+  ctx.fillStyle='#d9c4ff';ctx.fillText('TORNADO ZONE',W.bx*k,W.by*k);
+}
+function drawGuide(cx,cy,x,y,k,now){
+  if(st.status!=='play')return;
+  if(st.sweep<6){const p=(now/700)%1;ctx.strokeStyle=`rgba(255,208,74,${1-p})`;ctx.lineWidth=Math.max(2,k*.5);
+    ctx.beginPath();ctx.arc(cx,cy,(4+st.s*0.035+p*6)*k,0,7);ctx.stroke();
+    ctx.fillStyle='#ffd04a';ctx.font=`700 ${Math.max(10,k*3)}px ${FONT_DISP}`;ctx.textAlign='center';ctx.fillText('YOU',cx,cy-(6+st.s*0.036)*k)}
+  return;
+  const [tx,ty]=zoneCenterNear(x,y),a=Math.atan2(ty-y,tx-x),d0=(5+st.s*0.08)*k,len=5*k;
+  const bx=cx+Math.cos(a)*d0,by=cy+Math.sin(a)*d0,ex=bx+Math.cos(a)*len,ey=by+Math.sin(a)*len;
+  ctx.strokeStyle='#d9c4ff';ctx.fillStyle='#d9c4ff';ctx.lineWidth=Math.max(2,k*.55);ctx.setLineDash([k*1.2,k*1]);
+  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(ex,ey);ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(ex+Math.cos(a)*k*2,ey+Math.sin(a)*k*2);ctx.lineTo(ex+Math.cos(a+2.4)*k*1.8,ey+Math.sin(a+2.4)*k*1.8);ctx.lineTo(ex+Math.cos(a-2.4)*k*1.8,ey+Math.sin(a-2.4)*k*1.8);ctx.fill();
+}
+function coachLine(){
+  if(st.status!=='play')return '';
+  const names={m:'MOIST',u:'LIFT',h:'HEAT'};let worst=null,wd=0;
+  for(const k of ['m','u','h']){const b=BANDS[k],v=st[k],d=v<b[0]?b[0]-v:v>b[1]?v-b[1]:0;if(d>wd){wd=d;worst=[k,v<b[0]?'+':'−',v<b[0]?'low':'high']}}
+  if(worst)return `${names[worst[0]]} ${worst[2]}: tap ${names[worst[0]]} ${worst[1]}`;
+  const sh=shearAt(W,st.x,st.y);
+  if(st.s<45)return sh>0.35?'In the zone. Grow STRENGTH to 45 to start spinning':'Fuel balanced. STRENGTH growing…';
+  if(sh<=0.35)return 'Strong enough. Follow the arrow to the TORNADO ZONE';
+  return 'Spinning up. Stay in the zone';
+}
+function blobPath(cx,cy,r,seedIx,now,elong,mvAng,rot){
+  const n=blobNoise[seedIx],pts=36,t=now/1800;ctx.beginPath();
+  for(let i=0;i<=pts;i++){const a=i/pts*Math.PI*2,ar=a-rot;
+    let rr=r*(1+0.12*Math.sin(3*ar+n[0]+t)+0.08*Math.sin(5*ar+n[1]-t*.7)+0.06*Math.sin(2*ar+n[2]));
+    rr*=1+elong*Math.max(0,Math.cos(a-mvAng))**2;
+    const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
+  ctx.closePath();
+}
+function drawStorm(cx,cy,k,now,S,R){
+  const base=(2.5+S*0.08)*k, w=windAt(W,st.x,st.y,st.shift), mv=Math.atan2(w[1],w[0]);
+  const spin=R/100, rot=spinPhase, won=st.status==='win';
+  // reflectivity core (original look), gentle turn as it spins up
+  const layers=[[1,'#1c7a37',0],[0.8,'#39c25a',0],[0.6,'#e4cf34',35],[0.44,'#f0892a',55],[0.3,'#e3352c',70],[0.17,'#d33fe2',85]];
+  layers.forEach(([f,c,min],i)=>{if(S<min)return;ctx.fillStyle=c;ctx.globalAlpha=i===0?0.75:0.92;blobPath(cx,cy,base*f,i,now,0.35,mv,rot);ctx.fill()});
+  ctx.globalAlpha=1;
+  // radar-app storm markers: yellow circle = mesocyclone, red triangle = tornado vortex signature
+  const lw=Math.max(2,k*.55);
+  if(spin>0.3){ctx.strokeStyle='#ffd04a';ctx.lineWidth=lw;ctx.globalAlpha=Math.min(1,(spin-0.3)*4);
+    ctx.beginPath();ctx.arc(cx,cy,base*1.15,0,7);ctx.stroke();ctx.globalAlpha=1}
+  if(spin>0.75||won){const t=base*0.32,yy=cy;ctx.fillStyle='#ff3b3b';ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(1.5,k*.35);
+    ctx.beginPath();ctx.moveTo(cx-t,yy-t*0.6);ctx.lineTo(cx+t,yy-t*0.6);ctx.lineTo(cx,yy+t*0.9);ctx.closePath();ctx.fill();ctx.stroke()}
+  if(won){ // tornado warning polygon
+    const on=Math.floor(now/400)%2===0,L=base*2.6,Wd=base*1.3,ca=Math.cos(mv),sa=Math.sin(mv);
+    const P=[[-L*.4,-Wd],[L,-Wd*1.4],[L,Wd*1.4],[-L*.4,Wd]].map(([x,y])=>[cx+x*ca-y*sa,cy+x*sa+y*ca]);
+    ctx.strokeStyle=on?'#ff4a3d':'#ff8a80';ctx.lineWidth=Math.max(2,k*.6);ctx.beginPath();P.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.stroke();
+    ctx.fillStyle='#ff4a3d';ctx.font=`700 ${Math.max(11,k*3.4)}px ${FONT_DISP}`;ctx.textAlign='center';ctx.fillText('TOR',cx,cy-base*1.5);
+  }
+}
+function updateMeters(){
+  document.querySelectorAll('.mrow').forEach(row=>{const k=row.dataset.k,v=st[k];
+    row.querySelector('.fill').style.width=(k==='s'?v/2.6:v)+'%';row.querySelector('.val').textContent=Math.round(v);
+    const nd=row.querySelector('.needle');if(nd)nd.style.left=v+'%';
+    if(BANDS[k]){const b=BANDS[k],band=row.querySelector('.band');band.style.left=b[0]+'%';band.style.width=(b[1]-b[0])+'%';
+      row.classList.toggle('ok',v>=b[0]&&v<=b[1]);row.classList.toggle('hi',v>b[1])}});
+}
+function markQueued(){
+  document.querySelectorAll('[data-move]').forEach(b=>b.classList.toggle('q',b.dataset.move===queued.move));
+  document.querySelectorAll('[data-fuel]').forEach(b=>b.classList.toggle('q',b.dataset.fuel===queued.fuel));
+}
+function doSweep(now){
+  prevPos=[st.x,st.y];prevS=st.s;prevR=st.r;lastSweepAt=now;
+  const was=st.seen;const msgs=step(st,W,queued);buildZone();if(!was&&st.seen)revealAt=now;
+  msgs.forEach(m=>ticker.push({msg:m,at:st.sweep,bad:!m.startsWith('Low-level')&&!m.startsWith('ZONE')}));
+  queued={move:null,fuel:null};markQueued();updateMeters();
+  if(st.status!=='play'){running=false;finish()}
+}
+function loop(now){
+  const dt=Math.min(100,now-(lastT||now));lastT=now;
+  if(running&&!document.hidden){acc+=dt;phase=acc/SWEEP_MS%1;if(acc>=SWEEP_MS){acc-=SWEEP_MS;doSweep(now)}}
+  if(W&&st)spinPhase+=dt/1000*0.5*st.r/100;
+  if(W&&cv.width>1)draw(now);
+  requestAnimationFrame(loop);
+}
+function emojiTrail(){
+  const L=st.log,n=Math.min(10,L.length),out=[];
+  for(let i=0;i<n;i++){const v=L[Math.floor((i+1)*L.length/n)-1];out.push(v<40?'⬜':v<65?'🟩':v<111?'🟨':v<166?'🟧':v<201?'🟥':'🟪')}
+  return out.join('')+(st.status==='win'?'🌪️':'💨');
+}
+function efOf(n){return n<=45?5:n<=55?4:n<=70?3:n<=90?2:n<=115?1:0}
+function stageOf(win){if(win)return {e:'🌪️',h:'EF'+st.ef+' tornado',t:'EF'+st.ef+' tornado · '+st.mph+' mph'};const pk=Math.max(0,...st.log);
+  const h=pk>=111?'Supercell':pk>=58?'Severe storm':'Thunderstorm';return {e:pk>=111?'🌀':pk>=58?'⚠️':'⛈️',h,t:h+' · '+pk+' mph peak'}}
+function shareText(r){return `HOOK ECHO #${dayNum()} ${r.stage.e} ${r.stage.t}${r.win?' · '+fmt(r.sweeps):''}\n${r.trail}`}
+function finish(){
+  const win=st.status==='win';
+  if(mode==='daily'){const db=store.get();const key=todayKey();
+    if(!db.results[key])db.results[key]={win,sweeps:st.sweep,trail:emojiTrail(),stage:stageOf(win)};
+    if(win&&(!db.best||st.sweep<db.best))db.best=st.sweep; store.set(db)}
+  setTimeout(()=>showEnd(),win?2200:900);
+}
+function showEnd(){
+  const win=st.status==='win',db=store.get(),today=db.results[todayKey()];
+  const r=mode==='daily'&&today&&today.stage?today:{win,sweeps:st.sweep,trail:emojiTrail(),stage:stageOf(win)};
+  overlay.innerHTML=`<h2 class="${win?'':'bad'}">${r.stage.e} ${(r.stage.h||r.stage.t).toUpperCase()}</h2>
+   <div class="sub">${win?'':st.reason}</div>
+   <div class="stats"><div><b>${win?'EF'+st.ef:'—'}</b>rating</div><div><b>${win?st.mph:Math.max(0,...st.log)}</b>mph</div><div><b>${fmt(st.sweep)}</b>time</div><div><b>${streakOf(db.results)}</b>streak</div></div>
+   ${mode==='daily'?`<pre class="share" id="shareTxt">${shareText(r)}</pre>`:''}
+   <div class="obtns">${mode==='daily'?'<button class="obtn" id="copyBtn">COPY RESULT</button>':''}<button class="obtn ghost" id="pracBtn2">PRACTICE</button></div>`;
+  overlay.hidden=false;
+  const cb=$('#copyBtn');if(cb)cb.onclick=()=>{const t=$('#shareTxt').textContent;
+    try{navigator.clipboard.writeText(t).then(()=>{cb.textContent='COPIED'},selectShare)}catch(e){selectShare()}};
+  $('#pracBtn2').onclick=()=>startGame('practice');
+}
+function selectShare(){const el=$('#shareTxt');const rg=document.createRange();rg.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(rg)}
+function showIntro(){
+  const db=store.get(),done=db.results[todayKey()];
+  overlay.innerHTML=`<h2>${done?'SEE YOU TOMORROW':'STORM #'+dayNum()}</h2>
+   <ul>
+    <li>Keep the needles green to build wind.</li>
+    <li>Hit 90 mph to find the purple zone.</li>
+    <li>Spin it up. Wind at touchdown sets the EF.</li>
+   </ul>
+   ${done&&done.stage?`<pre class="share">${shareText(done)}</pre>`:''}
+   <div class="obtns">${done?'':'<button class="obtn" id="goBtn">START</button>'}<button class="obtn ghost" id="pracBtn">PRACTICE</button></div>`;
+  overlay.hidden=false;
+  const g=$('#goBtn');if(g)g.onclick=()=>startGame('daily');$('#pracBtn').onclick=()=>startGame('practice');
+}
+function startGame(m){
+  if(m==='daily'&&store.get().results[todayKey()]){showIntro();return}
+  setup(m);overlay.hidden=true;running=true;acc=0;lastSweepAt=performance.now();
+}
+document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();if(!running)return;queued.move=queued.move===b.dataset.move?null:b.dataset.move;markQueued()}));
+document.querySelectorAll('[data-fuel]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();if(!running)return;queued.fuel=queued.fuel===b.dataset.fuel?null:b.dataset.fuel;markQueued()}));
+$('#startBtn').onclick=()=>{if(!running)startGame('daily')};
+$('#practiceBtn').onclick=()=>startGame('practice');
+const KEYMAP={ArrowUp:['move','up'],ArrowDown:['move','down'],ArrowLeft:['move','left'],ArrowRight:['move','right'],
+  q:['fuel','m+'],a:['fuel','m-'],w:['fuel','u+'],s:['fuel','u-'],e:['fuel','h+'],d:['fuel','h-']};
+addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();if(!running)startGame(store.get().results[todayKey()]?'practice':'daily');return}
+  const m=KEYMAP[e.key]||KEYMAP[e.key.toLowerCase()];if(!m||!running)return;e.preventDefault();queued[m[0]]=m[1];markQueued()});
+setup('daily');sizeCanvas();showIntro();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
